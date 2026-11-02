@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Malaysian IC Formatter</title>
+  <style>
+    :root {
+      --bg: #f0f4f3;
+      --surface: #ffffff;
+      --ink: #1a2e28;
+      --muted: #5a726a;
+      --accent: #0d6e5f;
+      --accent-hover: #0a574b;
+      --border: #c5d4cf;
+      --error: #b33a3a;
+      --ok: #1f7a4d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background:
+        radial-gradient(ellipse at 10% 0%, #d8ebe4 0%, transparent 50%),
+        radial-gradient(ellipse at 90% 100%, #e8f0ee 0%, transparent 45%),
+        var(--bg);
+      color: var(--ink);
+      padding: 2rem 1rem 3rem;
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 0 0 1.5rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      box-shadow: 0 8px 24px rgba(26, 46, 40, 0.06);
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.45rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 180px;
+      padding: 0.85rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--ink);
+      background: #fafcfb;
+    }
+
+    textarea:focus {
+      outline: 2px solid rgba(13, 110, 95, 0.35);
+      border-color: var(--accent);
+      background: #fff;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin: 1rem 0 0;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+
+    button:active { transform: translateY(1px); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    .btn-secondary {
+      background: #e8efec;
+      color: var(--ink);
+    }
+
+    .btn-secondary:hover { background: #d9e5e0; }
+
+    .meta {
+      margin-top: 0.85rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .meta strong { color: var(--ok); }
+    .meta .bad { color: var(--error); font-weight: 600; }
+
+    .hint {
+      margin-top: 1.25rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .hint code {
+      background: #e8efec;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 1.25rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(120%);
+      background: var(--ink);
+      color: #fff;
+      padding: 0.65rem 1.1rem;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      opacity: 0;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Malaysian IC Formatter</h1>
+    <p class="sub">Paste IC numbers (with or without dashes). Output format: <strong>888888-88-8888</strong></p>
+
+    <div class="panel">
+      <label for="input">Paste your IC list here</label>
+      <textarea id="input" placeholder="591018-13-5745&#10;841021-13-5876&#10;880923525170&#10;750408135930"></textarea>
+
+      <div class="actions">
+        <button type="button" class="btn-primary" id="formatBtn">Format</button>
+        <button type="button" class="btn-secondary" id="copyBtn">Copy result</button>
+        <button type="button" class="btn-secondary" id="clearBtn">Clear</button>
+      </div>
+
+      <p class="meta" id="status">Ready — paste and click Format (or it formats as you type).</p>
+    </div>
+
+    <p class="hint">
+      Accepts one IC per line, or values separated by commas / tabs / spaces.
+      Non-digit characters are stripped. Rows that are not exactly 12 digits stay marked as invalid.
+      Example: <code>880923525170</code> → <code>880923-52-5170</code>
+    </p>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    const input = document.getElementById("input");
+    const status = document.getElementById("status");
+    const toast = document.getElementById("toast");
+    let toastTimer;
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 1600);
+    }
+
+    function formatIc(raw) {
+      const digits = String(raw).replace(/\D/g, "");
+      if (digits.length !== 12) {
+        return { ok: false, value: String(raw).trim() };
+      }
+      return {
+        ok: true,
+        value: `${digits.slice(0, 6)}-${digits.slice(6, 8)}-${digits.slice(8, 12)}`,
+      };
+    }
+
+    function splitTokens(text) {
+      return text
+        .split(/[\n\r,;\t]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+
+    function runFormat() {
+      const text = input.value;
+      if (!text.trim()) {
+        status.innerHTML = "Ready — paste and click Format (or it formats as you type).";
+        return;
+      }
+
+      const tokens = splitTokens(text);
+      let okCount = 0;
+      let badCount = 0;
+      const lines = tokens.map((token) => {
+        const result = formatIc(token);
+        if (result.ok) {
+          okCount += 1;
+          return result.value;
+        }
+        badCount += 1;
+        return result.value;
+      });
+
+      input.value = lines.join("\n");
+
+      const badNote = badCount
+        ? ` · <span class="bad">${badCount} invalid</span>`
+        : "";
+      status.innerHTML = `Formatted <strong>${okCount}</strong> IC${okCount === 1 ? "" : "s"}${badNote}`;
+    }
+
+    document.getElementById("formatBtn").addEventListener("click", runFormat);
+
+    document.getElementById("copyBtn").addEventListener("click", async () => {
+      const value = input.value.trim();
+      if (!value) {
+        showToast("Nothing to copy");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(value);
+        showToast("Copied to clipboard");
+      } catch {
+        input.select();
+        document.execCommand("copy");
+        showToast("Copied to clipboard");
+      }
+    });
+
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      input.value = "";
+      status.textContent = "Cleared.";
+      input.focus();
+    });
+
+    // Format live after a short pause while pasting/typing
+    let debounce;
+    input.addEventListener("input", () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(runFormat, 400);
+    });
+
+    input.addEventListener("paste", () => {
+      setTimeout(runFormat, 0);
+    });
+  </script>
+</body>
+</html>
